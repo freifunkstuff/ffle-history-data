@@ -1,0 +1,28 @@
+name: Fetch daily stats for DD nodes
+on:
+  schedule:
+    - cron: "0 23 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  update-dd-nodelist:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+        with:
+          token: ${{ secrets.GH_CI_TOKEN }}
+      - name: Update node count list
+        id: fetch
+        run: |
+          echo "time,count" > firmware_dd.csv
+          curl -s "https://grafana.freifunk-dresden.de/api/datasources/proxy/2/query?db=freifunk&epoch=s&q=SELECT%20max%28value%29%20FROM%20%22nodes_communities%22%20WHERE%20community%3D%27Leipzig%27%20GROUP%20BY%20%20time%281d%29%0A%0A" | jq -r '.results[0].series[0].values | .[] | [(.[0] | todate),.[1]] | @csv' >> firmware_dd.csv
+      - name: Commit changes
+        if: steps.fetch.conclusion == 'success'
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: Daily update
